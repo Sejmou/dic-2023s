@@ -22,7 +22,15 @@ class AmazonReviewsChiSquared(MRJob):
         self.a_encoding = 'A'
         self.b_encoding = 'B'
         self.c_encoding = 'C'
-        self.n_encoding = 'N'
+
+    def configure_args(self):
+        # add command line options specifying the number of reviews in the dataset
+        super().configure_args()
+        self.add_passthru_arg(
+            '--n',
+            dest='n',
+            type=int,
+            help='number of reviews in the dataset')
 
     def set_up_logging(cls, quiet=False, verbose=False, stream=None):
         log_to_stream(name="mrjob", debug=verbose, stream=stream)
@@ -59,10 +67,6 @@ class AmazonReviewsChiSquared(MRJob):
         logger.debug("category: %s, count: %d" % (category, 1))
         yield category, (self.category_count_encoding, 1)
 
-        # emit None the category and a count of 1
-        logger.debug("category: %s, count: %d" % (category, 1))
-        yield None, (category, 1)
-
         # emit the category and the term
         for term in terms:
             logger.debug("category: %s, term: %s" % (category, term))
@@ -71,69 +75,54 @@ class AmazonReviewsChiSquared(MRJob):
             yield term, (self.category_encoding, category)
 
     def reducer_calculate_variables(self, key, values):
-        if key is None:
-            number_of_reviews = 0
-            distinct_categories = set()
-            for (category, value) in values:
-                distinct_categories.add(category)
-                number_of_reviews += value
+        terms_in_category = []
+        categories_for_term = []
+        category_count = 0
 
-            for category in distinct_categories:
-                logger.debug("category: %s, number of reviews: %d" % (category, number_of_reviews))
-                yield category, (self.n_encoding, None, number_of_reviews)
-        else:
-            terms_in_category = []
-            categories_for_term = []
-            category_count = 0
+        for (encoding, value) in values:
+            if encoding == self.term_encoding:
+                terms_in_category.append(value)
+            elif encoding == self.category_encoding:
+                categories_for_term.append(value)
+            elif encoding == self.category_count_encoding:
+                category_count += value
 
-            for (encoding, value) in values:
-                if encoding == self.term_encoding:
-                    terms_in_category.append(value)
-                elif encoding == self.category_encoding:
-                    categories_for_term.append(value)
-                elif encoding == self.category_count_encoding:
-                    category_count += value
+        if len(terms_in_category) > 0:
+            # count the number of occurrences of each term in the category
+            term_counts = Counter(terms_in_category)
+            for term in term_counts.keys():
+                a = term_counts[term]
+                c = category_count - a
+                yield key, (self.a_encoding, term, a)
+                yield key, (self.c_encoding, term, c)
 
-            if len(terms_in_category) > 0:
-                # count the number of occurrences of each term in the category
-                term_counts = Counter(terms_in_category)
-                for term in term_counts.keys():
-                    a = term_counts[term]
-                    c = category_count - a
-                    yield key, (self.a_encoding, term, a)
-                    yield key, (self.c_encoding, term, c)
-
-            if len(categories_for_term) > 0:
-                # count the number of occurrences of each category for the term
-                category_counts = Counter(categories_for_term)
-                for category in category_counts.keys():
-                    b = sum(category_counts.values()) - category_counts[category]
-                    yield category, (self.b_encoding, key, b)
+        if len(categories_for_term) > 0:
+            # count the number of occurrences of each category for the term
+            category_counts = Counter(categories_for_term)
+            for category in category_counts.keys():
+                b = sum(category_counts.values()) - category_counts[category]
+                yield category, (self.b_encoding, key, b)
 
     def reducer_chi_squared(self, key, values):
         # create a dictionary for each term
         term_dict = {}
 
         # extract A, B, C, and D values for each term
-        # and the total number of reviews
-        n = 0
         for (encoding, term, value) in values:
-            if encoding == self.n_encoding:
-                n = value
-            else:
-                term_dict.setdefault(term, {"a": 0, "b": 0, "c": 0, "d": 0})
-                if encoding == self.a_encoding:
-                    term_dict[term]["a"] = value
-                elif encoding == self.b_encoding:
-                    term_dict[term]["b"] = value
-                elif encoding == self.c_encoding:
-                    term_dict[term]["c"] = value
+            term_dict.setdefault(term, {"a": 0, "b": 0, "c": 0, "d": 0})
+            if encoding == self.a_encoding:
+                term_dict[term]["a"] = value
+            elif encoding == self.b_encoding:
+                term_dict[term]["b"] = value
+            elif encoding == self.c_encoding:
+                term_dict[term]["c"] = value
 
         # calculate chi squared for each term
         for term in term_dict.keys():
             a = term_dict[term]["a"]
             b = term_dict[term]["b"]
             c = term_dict[term]["c"]
+            n = self.options.n
             d = n - a - b - c
             logger.debug("term: %s, a: %d, b: %d, c: %d, d: %d, n: %d" % (term, a, b, c, d, n))
 
