@@ -197,3 +197,4 @@ hadoop-common-project/hadoop-common/src/test/resources/contract-test-options.xml
 hadoop-tools/hadoop-openstack/src/test/resources/contract-test-options.xml
 
 # End of https://www.toptal.com/developers/gitignore/api/apachehadoop
+/data/
