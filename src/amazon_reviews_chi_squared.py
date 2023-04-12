@@ -18,7 +18,6 @@ class AmazonReviewsChiSquared(MRJob):
         self.stopwords = None
         self.category_encoding = 'c'
         self.term_encoding = 't'
-        self.category_count_encoding = 'cc'
         self.a_encoding = 'A'
         self.b_encoding = 'B'
         self.c_encoding = 'C'
@@ -42,7 +41,7 @@ class AmazonReviewsChiSquared(MRJob):
         with open("stopwords.txt", "r") as f:
             for line in f.read().splitlines():
                 self.stopwords.add(line.strip())
-        logger.debug("Stopwords loaded: %d" % len(self.stopwords))
+        # logger.debug("Stopwords loaded: %d" % len(self.stopwords))
 
     def mapper(self, _, line):
         # load json data from line
@@ -63,42 +62,57 @@ class AmazonReviewsChiSquared(MRJob):
         # remove stopwords
         terms = [token for token in terms if token not in self.stopwords]
 
-        # emit the category and a count of 1
-        logger.debug("category: %s, count: %d" % (category, 1))
-        yield category, (self.category_count_encoding, 1)
+        # emit the category and the terms
+        yield (category, self.category_encoding), terms
 
         # emit the category and the term
         for term in terms:
-            logger.debug("category: %s, term: %s" % (category, term))
-            yield category, (self.term_encoding, term)
-            logger.debug("term: %s, category: %s" % (term, category))
-            yield term, (self.category_encoding, category)
+            # logger.debug("term: %s, category: %s" % (term, category))
+            yield (term, self.term_encoding), category
+
+    def combiner(self, key, values):
+        # extract the encoding
+        _, encoding = key
+
+        if encoding == self.category_encoding:
+            # count the number of lists in values
+            category_count = 0
+            # count the number of occurrences of each term in the category
+            term_count_for_category = Counter()
+            for value in values:
+                category_count += 1
+                term_count_for_category += Counter(value)
+
+            yield key, category_count
+            yield key, term_count_for_category
+        elif encoding == self.term_encoding:
+            categories_count_for_term = Counter(values)
+            yield key, categories_count_for_term
 
     def reducer_calculate_variables(self, key, values):
-        terms_in_category = []
-        categories_for_term = []
-        category_count = 0
+        # extract the encoding
+        key, encoding = key
 
-        for (encoding, value) in values:
-            if encoding == self.term_encoding:
-                terms_in_category.append(value)
-            elif encoding == self.category_encoding:
-                categories_for_term.append(value)
-            elif encoding == self.category_count_encoding:
-                category_count += value
-
-        if len(terms_in_category) > 0:
-            # count the number of occurrences of each term in the category
-            term_counts = Counter(terms_in_category)
+        if encoding == self.category_encoding:
+            term_counts = Counter()
+            category_count = 0
+            for value in values:
+                if isinstance(value, int):
+                    # logger.debug("value (int): %d" % value)
+                    category_count += value
+                else:
+                    # logger.debug("value (other): %s" % value)
+                    term_counts += value
             for term in term_counts.keys():
                 a = term_counts[term]
                 c = category_count - a
                 yield key, (self.a_encoding, term, a)
                 yield key, (self.c_encoding, term, c)
 
-        if len(categories_for_term) > 0:
-            # count the number of occurrences of each category for the term
-            category_counts = Counter(categories_for_term)
+        elif encoding == self.term_encoding:
+            category_counts = Counter()
+            for value in values:
+                category_counts += value
             for category in category_counts.keys():
                 b = sum(category_counts.values()) - category_counts[category]
                 yield category, (self.b_encoding, key, b)
@@ -124,7 +138,7 @@ class AmazonReviewsChiSquared(MRJob):
             c = term_dict[term]["c"]
             n = self.options.n
             d = n - a - b - c
-            logger.debug("term: %s, a: %d, b: %d, c: %d, d: %d, n: %d" % (term, a, b, c, d, n))
+            # logger.debug("term: %s, a: %d, b: %d, c: %d, d: %d, n: %d" % (term, a, b, c, d, n))
 
             numerator = n * ((a * d - b * c) ** 2)
             denominator = (a + c) * (b + d) * (a + b) * (c + d)
@@ -137,13 +151,15 @@ class AmazonReviewsChiSquared(MRJob):
         terms = ["%s:%f" % (term, term_dict[term]["chi_squared"]) for term in terms]
 
         # emit the category and the string
-        yield key, " ".join(terms)
+        # enclose the key in chevrons
+        yield "<%s>" % key, " ".join(terms)
 
     def steps(self):
         return [
             MRStep(
                 mapper_init=self.mapper_init,
                 mapper=self.mapper,
+                combiner=self.combiner,
                 reducer=self.reducer_calculate_variables,
             ),
             MRStep(
