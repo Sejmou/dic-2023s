@@ -107,7 +107,7 @@ class AmazonReviewsChiSquared(MRJob):
 
             # emit the number of documents in the category
             category_count = term_counts_for_category.pop(self.document_count_for_category_encoding)
-            yield category, (self.document_count_for_category_encoding, _, category_count)
+            yield category, (self.document_count_for_category_encoding, None, category_count)
 
             # emit the term count for the category
             for term, count in term_counts_for_category.items():
@@ -116,6 +116,9 @@ class AmazonReviewsChiSquared(MRJob):
         elif encoding == self.term_encoding:
             # extract the term
             term, _ = key
+
+            # emit the term needed for the listing of all terms
+            yield None, term
 
             # count the number of occurrences of each category for the term
             category_counts_for_term = defaultdict(int)
@@ -128,6 +131,13 @@ class AmazonReviewsChiSquared(MRJob):
                 yield category, (self.b_encoding, term, aggregate_count - count)
 
     def reducer_chi_squared(self, key, values):
+        # Check if the key is None (i.e. the term list)
+        if key is None:
+            # emit a space-separated list of all terms
+            yield None, " ".join(sorted(values))
+            # terminate the reducer function
+            return
+
         # create a dictionary for each term
         term_dict = {}
         category_count = 0

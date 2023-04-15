@@ -35,4 +35,7 @@ if __name__ == '__main__':
     with myJob.make_runner() as runner:
         runner.run()
         for key, value in myJob.parse_output(runner.cat_output()):
-            print(key, value, "\n", end='')
+            if key is None:
+                print(value, "\n", end='')
+            else:
+                print(key, value, "\n", end='')
