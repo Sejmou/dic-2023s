@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from collections import Counter
+from collections import defaultdict
 
 from mrjob.job import MRJob
 from mrjob.step import MRStep
@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class AmazonReviewsChiSquared(MRJob):
-    FILES = ["../data/stopwords.txt"]
 
     def __init__(self, args=None):
         super().__init__(args)
         self.stopwords = None
         self.category_encoding = 'c'
+        self.category_count_encoding = 'e'
         self.term_encoding = 't'
         self.a_encoding = 'A'
         self.b_encoding = 'B'
@@ -37,11 +37,8 @@ class AmazonReviewsChiSquared(MRJob):
         log_to_stream(name="amazon_reviews_chi_squared", debug=verbose, stream=stream)
 
     def mapper_init(self):
-        self.stopwords = set()
         with open("stopwords.txt", "r") as f:
-            for line in f.read().splitlines():
-                self.stopwords.add(line.strip())
-        # logger.debug("Stopwords loaded: %d" % len(self.stopwords))
+            self.stopwords = set(f.read().splitlines())
 
     def mapper(self, _, line):
         # load json data from line
@@ -62,60 +59,61 @@ class AmazonReviewsChiSquared(MRJob):
         # remove stopwords
         terms = [token for token in terms if token not in self.stopwords]
 
-        # emit the category and the terms
-        yield (category, self.category_encoding), terms
+        yield (category, self.category_encoding), (self.category_count_encoding, 1)
 
         # emit the category and the term
         for term in terms:
-            # logger.debug("term: %s, category: %s" % (term, category))
-            yield (term, self.term_encoding), category
+            # emit the term and the category
+            yield (term, self.term_encoding), (category, 1)
+            # emit the category and the terms
+            yield (category, self.category_encoding), (term, 1)
 
     def combiner(self, key, values):
         # extract the encoding
         _, encoding = key
 
         if encoding == self.category_encoding:
-            # count the number of lists in values
-            category_count = 0
             # count the number of occurrences of each term in the category
-            term_count_for_category = Counter()
-            for value in values:
-                category_count += 1
-                term_count_for_category += Counter(value)
+            term_count_for_category = defaultdict(int)
+            for term, count in values:
+                term_count_for_category[term] += count
 
-            yield key, category_count
-            yield key, term_count_for_category
+            # emit the term count for the category
+            for term, count in term_count_for_category.items():
+                yield key, (term, count)
+
         elif encoding == self.term_encoding:
-            categories_count_for_term = Counter(values)
-            yield key, categories_count_for_term
+            # count the number of occurrences of each category for the term
+            categories_count_for_term = defaultdict(int)
+            for category, count in values:
+                categories_count_for_term[category] += count
+
+            # emit the categories count for the term
+            for category, count in categories_count_for_term.items():
+                yield key, (category, count)
 
     def reducer_calculate_variables(self, key, values):
         # extract the encoding
-        key, encoding = key
+        _, encoding = key
 
         if encoding == self.category_encoding:
-            term_counts = Counter()
-            category_count = 0
-            for value in values:
-                if isinstance(value, int):
-                    # logger.debug("value (int): %d" % value)
-                    category_count += value
-                else:
-                    # logger.debug("value (other): %s" % value)
-                    term_counts += value
-            for term in term_counts.keys():
-                a = term_counts[term]
-                c = category_count - a
-                yield key, (self.a_encoding, term, a)
-                yield key, (self.c_encoding, term, c)
+            category, _ = key
+            term_counts = defaultdict(int)
+            for term, count in values:
+                term_counts[term] += count
+            category_count = term_counts.pop(self.category_count_encoding)
+            for term, count in term_counts.items():
+                yield category, (self.a_encoding, term, count)
+                yield category, (self.c_encoding, term, category_count - count)
 
         elif encoding == self.term_encoding:
-            category_counts = Counter()
-            for value in values:
-                category_counts += value
-            for category in category_counts.keys():
-                b = sum(category_counts.values()) - category_counts[category]
-                yield category, (self.b_encoding, key, b)
+            term, _ = key
+            category_counts = defaultdict(int)
+            for category, count in values:
+                category_counts[category] += count
+            aggregate_count = sum(category_counts.values())
+            for category, count in category_counts.items():
+                yield category, (self.b_encoding, term, aggregate_count - count)
 
     def reducer_chi_squared(self, key, values):
         # create a dictionary for each term
@@ -123,32 +121,33 @@ class AmazonReviewsChiSquared(MRJob):
 
         # extract A, B, C, and D values for each term
         for (encoding, term, value) in values:
-            term_dict.setdefault(term, {"a": 0, "b": 0, "c": 0, "d": 0})
+            entry = term_dict.setdefault(term, {"a": 0, "b": 0, "c": 0})
             if encoding == self.a_encoding:
-                term_dict[term]["a"] = value
+                entry["a"] = value
             elif encoding == self.b_encoding:
-                term_dict[term]["b"] = value
+                entry["b"] = value
             elif encoding == self.c_encoding:
-                term_dict[term]["c"] = value
+                entry["c"] = value
 
         # calculate chi squared for each term
-        for term in term_dict.keys():
-            a = term_dict[term]["a"]
-            b = term_dict[term]["b"]
-            c = term_dict[term]["c"]
+        chi_squared_terms = {}
+        for term, term_values in term_dict.items():
+            a = term_values["a"]
+            b = term_values["b"]
+            c = term_values["c"]
             n = self.options.n
             d = n - a - b - c
-            # logger.debug("term: %s, a: %d, b: %d, c: %d, d: %d, n: %d" % (term, a, b, c, d, n))
 
             numerator = n * ((a * d - b * c) ** 2)
             denominator = (a + c) * (b + d) * (a + b) * (c + d)
-            term_dict[term]["chi_squared"] = numerator / denominator
+            # save the chi squared value into a new dictionary
+            chi_squared_terms[term] = numerator / denominator
 
         # Create a string with the 75 terms with the highest chi squared value sorted by chi squared value in
         # descending order in the format "term1:chi_squared1 term2:chi_squared2 ... term75:chi_squared75"
-        terms = sorted(term_dict.keys(), key=lambda x: term_dict[x]["chi_squared"], reverse=True)
-        terms = terms[:75]
-        terms = ["%s:%f" % (term, term_dict[term]["chi_squared"]) for term in terms]
+        terms = []
+        for term, chi_squared in sorted(chi_squared_terms.items(), key=lambda x: x[1], reverse=True)[:75]:
+            terms.append("%s:%f" % (term, chi_squared))
 
         # emit the category and the string
         # enclose the key in chevrons
