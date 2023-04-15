@@ -21,10 +21,12 @@ if __name__ == '__main__':
     # create job
     if args.hadoop_streaming_jar is None and args.r is None:
         myJob = AmazonReviewsChiSquared(args=[args.input, '--n', str(args.n)])
+        myJob.FILES = ["../data/stopwords.txt"]
     else:
         myJob = AmazonReviewsChiSquared(
             args=[args.input, '--hadoop-streaming-jar', str(args.hadoop_streaming_jar), '-r', str(args.r), '--n',
                   str(args.n)])
+        myJob.FILES = ["stopwords.txt"]
 
     # configure logging
     myJob.set_up_logging(quiet=True)
