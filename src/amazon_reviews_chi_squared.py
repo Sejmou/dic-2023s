@@ -48,25 +48,30 @@ class AmazonReviewsChiSquared(MRJob):
         text = review["reviewText"]
         category = review["category"]
 
-        # tokenizes each text by using space, tabs, digits, and the characters ()[]{}.!?,;:+=-_"'`~#@&*%€$§\/ as delimiters
-        terms = re.split("[^a-zA-Z<>^|]+", text)
-        # case folding
-        terms = [token.lower() for token in terms]
-        # remove terms with less than 2 characters
-        terms = [token for token in terms if len(token) > 1]
-        # retain unique terms
-        terms = set(terms)
-        # remove stopwords
-        terms = [token for token in terms if token not in self.stopwords]
+        # compile the regular expression pattern for splitting text into tokens
+        pattern = re.compile(r"[^a-zA-Z<>^|]+")
+
+        # iterate over tokens in text
+        for token in set(pattern.split(text)):
+            # case folding
+            token = token.lower()
+
+            # skip terms with less than 2 characters
+            if len(token) < 2:
+                continue
+
+            # skip stopwords
+            if token in self.stopwords:
+                continue
+
+            # emit the term and the category
+            yield (token, self.term_encoding), (category, 1)
+
+            # emit the category and the term
+            yield (category, self.category_encoding), (token, 1)
 
         # emit the category and the document count
         yield (category, self.category_encoding), (self.document_count_for_category_encoding, 1)
-
-        for term in terms:
-            # emit the term and the category
-            yield (term, self.term_encoding), (category, 1)
-            # emit the category and the terms
-            yield (category, self.category_encoding), (term, 1)
 
     def combiner(self, key, values):
         # extract the encoding
