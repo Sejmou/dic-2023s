@@ -34,6 +34,7 @@ if __name__ == '__main__':
     # run the job using the specified runner
     with myJob.make_runner() as runner:
         runner.run()
+        counters = runner.counters()
         for key, value in myJob.parse_output(runner.cat_output()):
             if key is None:
                 print(value, "\n", end='')
