@@ -1,4 +1,3 @@
-import heapq
 import json
 import logging
 import re
@@ -12,16 +11,23 @@ logger = logging.getLogger(__name__)
 
 
 class AmazonReviewsChiSquared(MRJob):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # number of reviews in the dataset
         self.n = None
+
+        # set of stopwords
         self.stopwords = None
-        self.category_encoding = 'c'
+
+        # encodings for the document count for a category
         self.document_count_for_category_encoding = 'n'
-        self.term_encoding = 't'
+        # encodings for the number of documents in category which contain term
         self.a_encoding = 'A'
+        # encodings for the number of documents not in category which contain term
         self.b_encoding = 'B'
+        # encodings for the number of documents in category which do not contain term
+        self.c_encoding = 'C'
 
     def configure_args(self):
         # add command line options specifying the number of reviews in the dataset
@@ -53,66 +59,59 @@ class AmazonReviewsChiSquared(MRJob):
         # compile the regular expression pattern for splitting text into tokens
         pattern = re.compile(r"[^a-zA-Z<>^|]+")
 
-        # iterate over tokens in text
-        for token in set(pattern.split(text)):
-            # case folding
-            token = token.lower()
+        # set to keep track of seen terms
+        seen_terms = set()
 
-            # skip terms with less than 2 characters
-            if len(token) < 2:
-                continue
+        # iterate over filtered terms and emit unique ones with the category
+        for term in (term.lower() for term in pattern.split(text) if
+                     len(term) >= 2 and term.lower() not in self.stopwords):
+            if term not in seen_terms:
+                # mark term as seen
+                seen_terms.add(term)
 
-            # skip stopwords
-            if token in self.stopwords:
-                continue
-
-            # emit the term and the category
-            yield (token, self.term_encoding), (category, 1)
-
-            # emit the category and the term
-            yield (category, self.category_encoding), (token, 1)
+                # emit the category and the term
+                yield category, (term, 1)
+                # emit the category and the document count
+                yield term, (category, 1)
 
         # emit the category and the document count
-        yield (category, self.category_encoding), (self.document_count_for_category_encoding, 1)
+        yield category, (self.document_count_for_category_encoding, 1)
 
     def combiner(self, key, values):
-        # combine the values for the same key
-        combined_counts = defaultdict(int)
-        # for value in values:
-        for value, _ in values:
-            combined_counts[value] += 1
+        # combine the values for each key
+        combined_values = defaultdict(int)
+
+        # iterate over the values and combine them
+        for term, count in values:
+            combined_values[term] += count
 
         # emit the combined values
-        for item in combined_counts.items():
+        for item in combined_values.items():
             yield key, item
 
     def reducer_calculate_variables(self, key, values):
-        # extract the encoding
-        _, encoding = key
-
-        if encoding == self.category_encoding:
-            # extract the category
-            category, _ = key
-
+        # Check if the key is a category (i.e. if key[0].isupper())
+        if key[0].isupper():
+            category = key
             # count the number of occurrences of each term in the category
             term_counts_for_category = defaultdict(int)
             for term, count in values:
                 term_counts_for_category[term] += count
 
-            # emit the number of documents in the category
-            category_count = term_counts_for_category.pop(self.document_count_for_category_encoding)
-            yield category, (self.document_count_for_category_encoding, None, category_count)
+            # extract the number of documents in the category
+            number_of_documents_for_category = term_counts_for_category.pop(self.document_count_for_category_encoding)
 
-            # emit the term count for the category
             for term, count in term_counts_for_category.items():
-                yield category, (self.a_encoding, term, count)
+                # emit the number of documents in category which contain term
+                yield (category, term), (self.a_encoding, count)
+                # emit the number of documents in category which do not contain term
+                yield (category, term), (self.c_encoding, number_of_documents_for_category - count)
 
-        elif encoding == self.term_encoding:
-            # extract the term
-            term, _ = key
-
-            # emit the term needed for the listing of all terms
-            yield None, term
+        # otherwise, the key is a term
+        else:
+            term = key
+            if term == self.document_count_for_category_encoding:
+                return
 
             # count the number of occurrences of each category for the term
             category_counts_for_term = defaultdict(int)
@@ -121,61 +120,32 @@ class AmazonReviewsChiSquared(MRJob):
                 category_counts_for_term[category] += count
                 aggregate_count += count
 
-            # emit the number of documents not in the category for each term
-            # aggregate_count = sum(category_counts_for_term.values())
             for category, count in category_counts_for_term.items():
-                yield category, (self.b_encoding, term, aggregate_count - count)
+                # emit the number of documents not in category which contain term
+                yield (category, term), (self.b_encoding, aggregate_count - count)
 
     def reducer_chi_squared(self, key, values):
-        # Check if the key is None (i.e. the term list)
-        if key is None:
-            # emit a space-separated list of all terms
-            yield None, " ".join(sorted(values))
-            # terminate the reducer function
-            return
+        # extract the category and the term
+        category, term = key
 
-        # create a dictionary for each term
-        term_dict = defaultdict(lambda: {"a": 0, "b": 0})
-        # initialize the number of documents in the category
-        category_count = 0
-
-        # extract A, B, values for each term and the number of documents in the category
-        for (encoding, term, value) in values:
-            # extract the number of documents in the category for each term
-            if encoding == self.a_encoding:
-                term_dict[term]["a"] = value
-            # extract the number of documents not in the category for each term
-            elif encoding == self.b_encoding:
-                term_dict[term]["b"] = value
-            # extract the number of documents in the category
-            elif encoding == self.document_count_for_category_encoding:
-                category_count = value
-
-        # calculate chi squared for each term
-        top_terms = []
         n = self.options.n
-        for term, term_values in term_dict.items():
-            a = term_values["a"]
-            b = term_values["b"]
-            c = category_count - a
-            d = n - a - b - c
+        a, b, c = 0, 0, 0
+        # extract the values for a, b, and c
+        for encoding, value in values:
+            if encoding == self.a_encoding:
+                a = value
+            elif encoding == self.b_encoding:
+                b = value
+            elif encoding == self.c_encoding:
+                c = value
 
-            # save the chi squared value into the dictionary
-            chi_squared = n * ((a * d - b * c) ** 2) / ((a + c) * (b + d) * (a + b) * (c + d))
+        # calculate d, the number of documents not in category which do not contain term
+        d = n - a - b - c
 
-            # keep track of the top 75 terms in a heap
-            if len(top_terms) < 75:
-                heapq.heappush(top_terms, (chi_squared, term))
-            else:
-                heapq.heappushpop(top_terms, (chi_squared, term))
+        # calculate chi-squared statistic for the term in the category
+        chi_squared = n * ((a * d - b * c) ** 2) / ((a + b) * (a + c) * (b + d) * (c + d))
 
-        # Create a string with the 75 terms with the highest chi squared value
-        # sorted by chi squared value in descending order
-        # in the format "term1:chi_squared1 term2:chi_squared2 ... term75:chi_squared75"
-        terms = ["%s:%f" % (term, chi_squared) for (chi_squared, term) in heapq.nlargest(75, top_terms)]
-
-        # emit the category enclosed in chevrons and the string of terms and chi squared values
-        yield "<%s>" % key, " ".join(terms)
+        yield category, (chi_squared, term)
 
     def steps(self):
         return [
