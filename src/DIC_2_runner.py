@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 def parse_job_output(job, runner):
+    """
+    Parse the output of a job.
+    :param job: The job to parse the output of.
+    :param runner: The runner to use to parse the output.
+    :return: Nothing.
+    """
     # dictionary to store the 75 terms with the highest chi-squared value for each category
     # use a default dictionary to avoid having to check if a category is already in the dictionary
     terms_for_category = defaultdict(lambda: [])
@@ -22,7 +28,7 @@ def parse_job_output(job, runner):
     # loop through the output of the job in the format category, chi-squared value, term
     # and extract the 75 terms with the highest chi-squared value for each category
     # and store them in a dictionary with the category as key and the list of terms as value using a heapq
-    for category, (chi_squared_value, term) in job.parse_output(runner.cat_output()):
+    for _, (category, chi_squared_value, term) in job.parse_output(runner.cat_output()):
 
         # if the heap of terms for the category has more than 75 elements,
         # remove the term with the lowest chi-squared value
