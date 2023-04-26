@@ -11,10 +11,10 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-def parse_job_output(job, runner):
+def parse_chi_squared_job_output(job, runner):
     """
-    Parse the output of a job.
-    :param job: The job to parse the output of.
+    Parse the output of the job computing chi squared values.
+    :param job: The chi squared computation job to parse the output of.
     :param runner: The runner to use to parse the output.
     :return: Nothing.
     """
@@ -85,4 +85,4 @@ if __name__ == "__main__":
         runner2.run()
 
         # parse the output of the job and print the results
-        parse_job_output(job2, runner2)
+        parse_chi_squared_job_output(job2, runner2)
