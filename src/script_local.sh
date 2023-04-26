@@ -7,11 +7,11 @@
 # If one argument is given, it runs the default runner on the given file
 # If two arguments are given, it runs the given runner on the given file
 if [ $# -eq 0 ]; then
-  file="./data/reviews_devset.json"
-  runner="./src/DIC_2_runner.py"
+  file="../data/reviews_devset.json"
+  runner="./runner.py"
 elif [ $# -eq 1 ]; then
   file="$1"
-  runner="./src/DIC_2_runner.py"
+  runner="./runner.py"
 elif [ $# -eq 2 ]; then
   file="$1"
   runner="$2"
@@ -20,4 +20,4 @@ else
   exit 1
 fi
 
-time python "$runner" "$file" >lcoal_output_devset.txt
+time python "$runner" "$file" >local_output_ex1.txt
