@@ -21,4 +21,4 @@ else
   exit 1
 fi
 
-time python "$runner" --hadoop-streaming-jar /usr/lib/hadoop/tools/lib/hadoop-streaming-3.3.4.jar -r hadoop "$file" >output_ex1.txt
+time python "$runner" --hadoop-streaming-jar /usr/lib/hadoop/tools/lib/hadoop-streaming-3.3.4.jar -r hadoop "$file" >output.txt

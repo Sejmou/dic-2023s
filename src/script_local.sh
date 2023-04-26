@@ -20,4 +20,4 @@ else
   exit 1
 fi
 
-time python "$runner" "$file" >local_output_ex1.txt
+time python "$runner" "$file" >local_output.txt
