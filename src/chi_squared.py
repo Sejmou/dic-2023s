@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 class AmazonReviewsChiSquared(MRJob):
     """
-    This job calculates the chi-squared statistic for each term in the dataset.
+    This job calculates the chi-squared statistic for each pair of category and term in the dataset.
     """
 
     def __init__(self, *args, **kwargs):
         """
         Initialize the job.
-        :param args:
-        :param kwargs:
+        :param args: Positional arguments.
+        :param kwargs: Keyword arguments.
         """
         super().__init__(*args, **kwargs)
 
@@ -53,7 +53,8 @@ class AmazonReviewsChiSquared(MRJob):
         """
         Map each review to a set of unique terms.
         Emit the category and the term.
-        :param _:
+        :param _: A key.
+        Unused.
         :param line: A single line of the input file.
         Represents a single review.
         :return: Yields the term and a tuple of the form (category, 1).
@@ -109,7 +110,7 @@ class AmazonReviewsChiSquared(MRJob):
         Calculate the chi-squared statistic for each term and category.
         :param key: A term.
         :param values: List of tuples of the form (category, count).
-        :return: Yields the category and a tuple of the form (chi-squared, term).
+        :return: Yields None and a tuple of the form (category, chi-squared, term).
         """
         # count the number of occurrences of each category for the term
         category_counts_for_term = defaultdict(int)

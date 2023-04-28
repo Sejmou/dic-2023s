@@ -24,8 +24,9 @@ class CategoryCounter(MRJob):
 
     def mapper(self, _, line):
         """
-
-        :param _:
+        Map each review to a category.
+        :param _: A key.
+        Unused.
         :param line: A single line of the input file.
         Represents a single review.
         :return: Yields the category and a count of 1.
