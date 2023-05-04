@@ -199,3 +199,5 @@ hadoop-tools/hadoop-openstack/src/test/resources/contract-test-options.xml
 # End of https://www.toptal.com/developers/gitignore/api/apachehadoop
 /data/*
 !/data/stopwords.txt
+
+.DS_Store
