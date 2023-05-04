@@ -61,7 +61,7 @@ if __name__ == "__main__":
     job2 = AmazonReviewsChiSquared()
 
     # load the stopwords file, and the category counts file as input files for the jobs
-    job2.FILES = ["../data/stopwords.txt", "./category_counts.json"]
+    job2.FILES = ["./stopwords.txt", "./category_counts.json"]
 
     # run the job using the specified runner
     with job1.make_runner() as runner1:
