@@ -85,7 +85,7 @@ if __name__ == "__main__":
             f"Input directory {input_dir} does not contain any .jpg images."
         )
 
-    print(f"Found {len(img_paths)} images in {input_dir}")
+    print(f"Found {len(img_paths)} images in '{input_dir}'")
     print("Encoding images as array of Base64 strings")
 
     encoding_start_time = time.time()
@@ -103,41 +103,57 @@ if __name__ == "__main__":
     url = "http://127.0.0.1:5000/api/detect"
     payload = json.dumps({"images": img_payload_dicts})
     headers = {"Content-Type": "application/json"}
-    print(f"Uploading to the API")
+    print(f"Sending data to API")
 
-    upload_start_time = time.time()
+    upload_start_datetime = datetime.datetime.now()
+    timestamp_filename = upload_start_datetime.strftime(
+        "%Y-%m-%d_%H%M%S"
+    )  # will be used in output filename to uniquely identify the result
+    timestamp_str = upload_start_datetime.strftime(
+        "%Y-%m-%dT%H:%M:%S.%fZ"
+    )  # for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
     response = requests.post(url, data=payload, headers=headers)
     response_received_time = time.time()
-    upload_time = (
+    request_time = (
         response.elapsed.total_seconds()
     )  # https://stackoverflow.com/a/43260678/13727176
     print(f"Received response with status code {response.status_code}")
-    total_request_time = response_received_time - upload_start_time
-    server_response_time = total_request_time - upload_time
-
-    print(f"Uploading took {upload_time} seconds")
-    print(f"Response time was {server_response_time} seconds")
-    print(f"Total request time was {total_request_time} seconds")
-
-    timestamp_filename = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    timestamp_str = datetime.datetime.now().strftime(
-        "%Y-%m-%dT%H:%M:%S.%fZ"
-    )  # for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
+    print(
+        f"Request (sending input data and receiving response with results) took {request_time} seconds"
+    )
 
     response_content = response.json()
+
+    server_processing_time = response_content["processing_time"]
+    print(f"Server processed data in {server_processing_time} seconds")
+
+    data_transfer_time = request_time - server_processing_time
+    print(
+        f"Data transfer between server and client (request (client -> server + response (server -> client)) took {data_transfer_time} seconds"
+    )
+
+    upload_received_datetime = datetime.datetime.strptime(
+        response_content["request_received_at"], "%Y-%m-%dT%H:%M:%S.%fZ"
+    )
+    upload_time = (upload_received_datetime - upload_start_datetime).total_seconds()
+    print(f"Upload (sending request from client to server) took {upload_time} seconds")
+
     result = {}
     result["api_response"] = response_content
+    result["data_transfer_time"] = data_transfer_time
     result["upload_time"] = upload_time
-    result["server_response_time"] = server_response_time
-    result["total_request_time"] = total_request_time
-    result["encoding_time"] = encoding_time
-    result["timestamp"] = timestamp_str
+    result["server_processing_time"] = server_processing_time
+    result["total_request_time"] = request_time
+    result["request_sent_at"] = timestamp_str
+    result["upload_time"] = upload_time
+    result["input_folder_name"] = input_dir.split("/")[-1]
+    result["api_url"] = url
 
     output_file_path = os.path.join(
         output_dir,
         f"result_{input_dir.split('/')[-1]}_{timestamp_filename}.json",
     )
-    print(f"Writing result to {output_file_path}")
+    print(f"Writing result to '{output_file_path}'")
 
     os.makedirs(output_dir, exist_ok=True)
     write_json_to_file(
