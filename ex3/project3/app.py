@@ -23,23 +23,27 @@ import tensorflow_hub as hub
 from PIL import Image
 from flask import Flask, request, jsonify, make_response
 
-# initializing the flask app
 app = Flask(__name__)
 
 
-def detection_loop(images):
+def detection_loop(images: list):
+    """
+    Performs object detection on a list of images.
+
+    Args:
+        images: list of tuples (filename, image) where image is a numpy ndarray of shape (width, height) if grayscale or (width, height, 3) if RGB
+    """
     module_handle = "https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1"  # SSD-based object detection model trained on Open Images V4 with ImageNet pre-trained MobileNet V2 as image feature extractor.
     detector = hub.load(module_handle).signatures["default"]
 
     bounding_boxes = []
     inf_times = []
-    upload_times = []
 
     for i, image in enumerate(images):
-        print(f"Processing image {i + 1} of {len(images)}")
-        upload_start_time = time.time()
+        filename, content = image
+        print(f"Processing image {i + 1} of {len(images)} ({filename}))")
 
-        img_tensor = convert_to_tensor(image)
+        img_tensor = convert_to_tensor(content)
 
         inference_start_time = time.time()
 
@@ -47,30 +51,27 @@ def detection_loop(images):
         end_time = time.time()
 
         bounding_boxes.append(
-            process_detection_result(
-                result, img_width=img_tensor.shape[1], img_height=img_tensor.shape[2]
-            )
+            {
+                "filename": filename,
+                "boxes": process_detection_result(
+                    result,
+                    img_width=img_tensor.shape[1],
+                    img_height=img_tensor.shape[2],
+                ),
+            }
         )
 
         inference_time = end_time - inference_start_time
         inf_times.append(inference_time)
 
-        upload_time = inference_start_time - upload_start_time
-        upload_times.append(upload_time)
-
     avg_inf_time = sum(inf_times) / len(inf_times)
-    avg_upload_time = sum(upload_times) / len(upload_times)
 
-    # create a dictionary of the data to be returned to the client
     data = {
         "bounding_boxes": bounding_boxes,
         "inf_time": inf_times,
         "avg_inf_time": str(avg_inf_time),
-        "upload_time": upload_times,
-        "avg_upload_time": str(avg_upload_time),
     }
 
-    # return the response to the client as json with status code 200
     return make_response(jsonify(data), 200)
 
 
@@ -80,18 +81,25 @@ def main():
     # get the json data from the request body and convert it to a python dictionary object
     data = request.get_json(force=True)
 
-    # get the array of images from the json body
-    imgs = data["images"]
-
-    images = []
-    for img in imgs:
-        # convert the base64 encoded image to a numpy array and append it to the list of images
-        images.append(
-            (np.array(Image.open(io.BytesIO(base64.b64decode(img))), dtype=np.float32))
-        )
+    filenames = [img["name"] for img in data["images"]]
+    img_contents_base64 = [img["content"] for img in data["images"]]
+    decoded_images = [decode_image(img) for img in img_contents_base64]
 
     # call the detection loop method and return the response to the client
-    return detection_loop(images)
+    return detection_loop(list(zip(filenames, decoded_images)))
+
+
+def decode_image(img):
+    """
+    Decodes a base64-encoded image.
+
+    Args:
+        img: base64-encoded image
+
+    Returns:
+        image: numpy ndarray of shape (width, height) if grayscale or (width, height, 3) if RGB
+    """
+    return np.array(Image.open(io.BytesIO(base64.b64decode(img))), dtype=np.float32)
 
 
 def convert_to_tensor(image: np.ndarray):
