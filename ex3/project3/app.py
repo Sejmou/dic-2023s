@@ -24,18 +24,48 @@ from PIL import Image
 from flask import Flask, request, jsonify, make_response
 import datetime
 
-app = Flask(__name__)
+
+def create_app():
+    app = Flask(__name__)
+
+    module_handle = "https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1"  # SSD-based object detection model trained on Open Images V4 with ImageNet pre-trained MobileNet V2 as image feature extractor.
+    detector = hub.load(module_handle).signatures["default"]
+    app.detector = detector
+
+    # routing http posts to this method
+    @app.route("/api/detect", methods=["POST", "GET"])
+    def main():
+        processing_start_time = time.time()
+        incoming_request_timestamp_str = datetime.datetime.now().strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        )  # required by client for upload time calculation; using this format for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
+
+        # get the json data from the request body and convert it to a python dictionary object
+        data = request.get_json(force=True)
+
+        filenames = [img["name"] for img in data["images"]]
+        img_contents_base64 = [img["content"] for img in data["images"]]
+        decoded_images = [decode_image(img) for img in img_contents_base64]
+
+        data = detection_loop(app.detector, list(zip(filenames, decoded_images)))
+
+        processing_time = time.time() - processing_start_time
+        data["processing_time"] = processing_time
+        data["request_received_at"] = incoming_request_timestamp_str
+
+        return make_response(jsonify(data), 200)
+
+    return app
 
 
-def detection_loop(images: list):
+def detection_loop(detector, images: list):
     """
     Performs object detection on a list of images.
 
     Args:
+        detector: the object detection model
         images: list of tuples (filename, image) where image is a numpy ndarray of shape (width, height) if grayscale or (width, height, 3) if RGB
     """
-    module_handle = "https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1"  # SSD-based object detection model trained on Open Images V4 with ImageNet pre-trained MobileNet V2 as image feature extractor.
-    detector = hub.load(module_handle).signatures["default"]
 
     bounding_boxes = []
     inf_times = []
@@ -74,30 +104,6 @@ def detection_loop(images: list):
     }
 
     return data
-
-
-# routing http posts to this method
-@app.route("/api/detect", methods=["POST", "GET"])
-def main():
-    processing_start_time = time.time()
-    incoming_request_timestamp_str = datetime.datetime.now().strftime(
-        "%Y-%m-%dT%H:%M:%S.%fZ"
-    )  # required by client for upload time calculation; using this format for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
-
-    # get the json data from the request body and convert it to a python dictionary object
-    data = request.get_json(force=True)
-
-    filenames = [img["name"] for img in data["images"]]
-    img_contents_base64 = [img["content"] for img in data["images"]]
-    decoded_images = [decode_image(img) for img in img_contents_base64]
-
-    data = detection_loop(list(zip(filenames, decoded_images)))
-
-    processing_time = time.time() - processing_start_time
-    data["processing_time"] = processing_time
-    data["request_received_at"] = incoming_request_timestamp_str
-
-    return make_response(jsonify(data), 200)
 
 
 def decode_image(img):
@@ -181,4 +187,5 @@ def process_detection_result(result: dict, img_width: int, img_height: int):
 
 
 if __name__ == "__main__":
+    app = create_app()
     app.run(host="0.0.0.0")
