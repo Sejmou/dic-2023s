@@ -28,77 +28,138 @@ app = Flask(__name__)
 
 
 def detection_loop(images):
-    # FasterRCNN+InceptionResNet V2: high accuracy, high inference time
-    module_handle = "https://tfhub.dev/google/faster_rcnn/openimages_v4/inception_resnet_v2/1"
-    # ssd+mobilenet V2: low accuracy, low inference time
-    # module_handle = "https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1"
-
-    # load the model from the tensorflow hub
-    detector = hub.load(module_handle).signatures['default']
+    module_handle = "https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1"  # SSD-based object detection model trained on Open Images V4 with ImageNet pre-trained MobileNet V2 as image feature extractor.
+    detector = hub.load(module_handle).signatures["default"]
 
     bounding_boxes = []
     inf_times = []
     upload_times = []
 
-    for image in images:
-        # get the current time before upload
+    for i, image in enumerate(images):
+        print(f"Processing image {i + 1} of {len(images)}")
         upload_start_time = time.time()
 
-        # convert image to tensor and add batch dimension to it
-        converted_img = tf.image.convert_image_dtype(image, tf.float32)[tf.newaxis, ...]
+        img_tensor = convert_to_tensor(image)
 
-        # get the current time before inference
         inference_start_time = time.time()
 
-        # perform inference on the image and get the result from the model output
-        result = detector(converted_img)
-
-        # get the current time after inference
+        result = detector(img_tensor)
         end_time = time.time()
 
-        # append the result to the list of bounding boxes
-        bounding_boxes.append(result['detection_boxes'].numpy())
+        bounding_boxes.append(
+            process_detection_result(
+                result, img_width=img_tensor.shape[1], img_height=img_tensor.shape[2]
+            )
+        )
 
-        # append the inference time to the list of inference times
-        inf_times.append(end_time - inference_start_time)
+        inference_time = end_time - inference_start_time
+        inf_times.append(inference_time)
 
-        # append the upload time to the list of upload times
-        upload_times.append(end_time - upload_start_time)
+        upload_time = inference_start_time - upload_start_time
+        upload_times.append(upload_time)
 
-    # calculate the average inference time and upload time
     avg_inf_time = sum(inf_times) / len(inf_times)
-
-    # calculate the average upload time
     avg_upload_time = sum(upload_times) / len(upload_times)
 
-    # convert the bounding boxes to a list of lists so that it can be serialized to json
-    bounding_boxes = [box.tolist() for box in bounding_boxes]
-
     # create a dictionary of the data to be returned to the client
-    data = {"bounding_boxes": bounding_boxes, "inf_time": inf_times, "avg_inf_time": str(avg_inf_time),
-            "upload_time": upload_times, "avg_upload_time": str(avg_upload_time)}
+    data = {
+        "bounding_boxes": bounding_boxes,
+        "inf_time": inf_times,
+        "avg_inf_time": str(avg_inf_time),
+        "upload_time": upload_times,
+        "avg_upload_time": str(avg_upload_time),
+    }
 
     # return the response to the client as json with status code 200
     return make_response(jsonify(data), 200)
 
 
 # routing http posts to this method
-@app.route('/api/detect', methods=['POST', 'GET'])
+@app.route("/api/detect", methods=["POST", "GET"])
 def main():
     # get the json data from the request body and convert it to a python dictionary object
     data = request.get_json(force=True)
 
     # get the array of images from the json body
-    imgs = data['images']
+    imgs = data["images"]
 
     images = []
     for img in imgs:
         # convert the base64 encoded image to a numpy array and append it to the list of images
-        images.append((np.array(Image.open(io.BytesIO(base64.b64decode(img))), dtype=np.float32)))
+        images.append(
+            (np.array(Image.open(io.BytesIO(base64.b64decode(img))), dtype=np.float32))
+        )
 
     # call the detection loop method and return the response to the client
     return detection_loop(images)
 
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+def convert_to_tensor(image: np.ndarray):
+    """
+    Converts input image (numpy ndarray) to a tensor compatible with our chosen object detection model.
+
+    Args:
+        image: numpy ndarray of shape (width, height) if grayscale or (width, height, 3) if RGB
+
+    Returns:
+        image: tensor of shape (1, width, height, num_channels), as required by the model
+    """
+    image = tf.convert_to_tensor(image)
+
+    if len(image.shape) == 2:
+        # image is grayscale, convert to RGB
+        image = tf.expand_dims(
+            image, axis=-1
+        )  # conversion function expects shape (width, height, 1)
+        image = tf.image.grayscale_to_rgb(image)
+
+    # convert to shape: [1, width, height, num_channels]
+    image = tf.expand_dims(image, axis=0)
+    return image
+
+
+def process_detection_result(result: dict, img_width: int, img_height: int):
+    """
+    Converts output of object detection for our chosen object detection model (https://tfhub.dev/google/openimages_v4/ssd/mobilenet_v2/1)
+    to a human-readable list of bounding boxes.
+
+    Each bounding box is a dictionary with the following keys:
+        - class: a string describing the class of the object detected
+        - score: the confidence score of the detection
+        - ymin: the y-coordinate of the top-left corner of the bounding box
+        - xmin: the x-coordinate of the top-left corner of the bounding box
+        - ymax: the y-coordinate of the bottom-right corner of the bounding box
+        - xmax: the x-coordinate of the bottom-right corner of the bounding box
+    """
+
+    coords = result["detection_boxes"].numpy().astype(float)
+    classes = result["detection_class_entities"].numpy().astype(str)
+    scores = result["detection_scores"].numpy().astype(float)
+
+    # convert the box coordinates from relative to absolute pixel values
+    coords[:, 0] *= img_width
+    coords[:, 1] *= img_height
+    coords[:, 2] *= img_width
+    coords[:, 3] *= img_height
+
+    def get_box_dict(box, class_name, score):
+        return {
+            "class": class_name,
+            "score": score,
+            "ymin": box[0],
+            "xmin": box[1],
+            "ymax": box[2],
+            "xmax": box[3],
+        }
+
+    # convert the bounding boxes to a list of dictionaries
+    boxes = [
+        get_box_dict(box, class_name, score)
+        for box, class_name, score in zip(coords, classes, scores)
+    ]
+
+    return boxes
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0")
