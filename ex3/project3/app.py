@@ -149,7 +149,7 @@ def process_detection_result(result: dict, img_width: int, img_height: int):
     to a human-readable list of bounding boxes.
 
     Each bounding box is a dictionary with the following keys:
-        - class: a string describing the class of the object detected
+        - class_name: a string describing the class of the object detected
         - score: the confidence score of the detection
         - ymin: the y-coordinate of the top-left corner of the bounding box
         - xmin: the x-coordinate of the top-left corner of the bounding box
@@ -169,7 +169,7 @@ def process_detection_result(result: dict, img_width: int, img_height: int):
 
     def get_box_dict(box, class_name, score):
         return {
-            "class": class_name,
+            "class_name": class_name,
             "score": score,
             "ymin": box[0],
             "xmin": box[1],
