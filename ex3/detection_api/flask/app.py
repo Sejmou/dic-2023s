@@ -33,7 +33,7 @@ def create_app():
     app.detector = detector
 
     # routing http posts to this method
-    @app.route("/api/detect", methods=["POST", "GET"])
+    @app.route("/api/detect", methods=["POST"])
     def main():
         processing_start_time = time.time()
         incoming_request_timestamp_str = datetime.datetime.now().strftime(

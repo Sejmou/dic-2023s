@@ -37,13 +37,6 @@ def encode_images(images):
     return [encode_image(image) for image in images]
 
 
-def decode_image(image):
-    """
-    Decode a base64 string to PIL image
-    """
-    return Image.open(io.BytesIO(base64.b64decode(image)))
-
-
 def write_json_to_file(json: str, path: str):
     with open(path, "w") as file:
         file.write(json)
