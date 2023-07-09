@@ -9,7 +9,7 @@ to make it accept JPEG a single JPEG image in base64 format as input.
 
 This means that the output of the model (and hence the server) is the same as for example in this model: https://tfhub.dev/tensorflow/ssd_mobilenet_v2/2
 
-The script assumes that a model trained on the  is served.
+The script assumes that a model trained on the COCO 2017 dataset (https://cocodataset.org/#download) is served.
 
 Parts of the script were adapted from https://github.com/tensorflow/serving/blob/master/tensorflow_serving/example/resnet_client.py
 """
