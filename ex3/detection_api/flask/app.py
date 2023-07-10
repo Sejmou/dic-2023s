@@ -3,37 +3,64 @@ import os
 import tensorflow as tf
 from flask import Flask, request, jsonify, make_response
 import datetime
+from datetime import timezone
 import base64
 
 
 def create_app():
     app = Flask(__name__)
 
-    model_name = "resnet50_v1_fpn_640x640_base64"
-    model_path = get_model_path(model_name)
-    detector = tf.saved_model.load(model_path)
-    app.predict_fn = detector.signatures["serving_default"]
+    model_config = {
+        # key is the model name, value is the path to the saved model in the file system
+        "resnet50_v1_fpn_640x640": get_model_path("resnet50_v1_fpn_640x640_base64"),
+        "ssd_mobilenet_v2": get_model_path("ssd_mobilenet_v2_base64"),
+    }
+
+    models = {}
+    for model_name, model_path in model_config.items():
+        print(f"Loading model {model_name} from {model_path}")
+        detector = tf.saved_model.load(model_path)
+        print(f"Model {model_name} loaded successfully")
+        predict_fn = detector.signatures["serving_default"]
+        models[model_name] = predict_fn
+
+    app.models = models
 
     # routing http posts to this method
     @app.route("/api/detect", methods=["POST"])
     def main():
-        processing_start_time = time.time()
-        incoming_request_timestamp_str = datetime.datetime.now().strftime(
-            "%Y-%m-%dT%H:%M:%S.%fZ"
-        )  # required by client for upload time calculation; using this format for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
+        (
+            incoming_request_time,
+            incoming_request_time_str,
+        ) = get_current_timestamp()  # required by client for upload time calculation
 
         # get the json data from the request body and convert it to a python dictionary object
         data = request.get_json(force=True)
 
+        model = data.get("model")
+        if not model:
+            return make_response(
+                jsonify(
+                    {
+                        "error": f'Model not specified. Please add it to the payload (key: "model"). Options are {model_config.keys()}'
+                    }
+                ),
+                400,
+            )
+        predict_fn = app.models.get(model)
+        if not predict_fn:
+            return make_response(jsonify({"error": f"Model {model} not found"}), 404)
         filenames = [img["name"] for img in data["images"]]
         base64_imgs = [img["content"] for img in data["images"]]
         img_bytes = [decode_base64(img) for img in base64_imgs]
 
-        data = detection_loop(app.predict_fn, list(zip(filenames, img_bytes)))
+        data = detection_loop(predict_fn, list(zip(filenames, img_bytes)))
 
-        processing_time = time.time() - processing_start_time
+        processing_time = (
+            datetime.datetime.now(timezone.utc) - incoming_request_time
+        ).total_seconds()
         data["processing_time"] = processing_time
-        data["request_received_at"] = incoming_request_timestamp_str
+        data["request_received_at"] = incoming_request_time_str
 
         return make_response(jsonify(data), 200)
 
@@ -87,6 +114,16 @@ def detection_loop(predict_fn, images: list):
     }
 
     return data
+
+
+def get_current_timestamp():
+    now = (
+        datetime.datetime.utcnow()
+    )  # using UTC time both on client and server for consistency
+    timestamp_str = now.strftime(
+        "%Y-%m-%dT%H:%M:%S.%fZ"
+    )  # for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
+    return now, timestamp_str
 
 
 def process_detection_result(result: dict):

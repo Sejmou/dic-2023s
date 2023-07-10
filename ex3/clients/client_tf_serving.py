@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
     output_file_path = os.path.join(
         output_dir,
-        f"{'l' if 'localhost' in url else 'r'}_{input_dir.split('/')[-1]}({model})_{start_datetime_str}.json",
+        f"{'l' if 'localhost' in url else 'r'}_tf-serving_{input_dir.split('/')[-1]}({model})_{start_datetime_str}.json",
     )
     print(f"Writing result to '{output_file_path}'")
     write_json_to_file(

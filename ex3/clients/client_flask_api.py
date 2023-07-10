@@ -6,6 +6,7 @@ import requests
 import argparse
 import time
 import datetime
+from datetime import timezone
 
 
 def get_image_paths(folder):
@@ -43,7 +44,9 @@ def write_json_to_file(json: str, path: str):
 
 
 def get_current_timestamp():
-    now = datetime.datetime.now()
+    now = (
+        datetime.datetime.utcnow()
+    )  # using UTC time both on client and server for consistency
     timestamp_str = now.strftime(
         "%Y-%m-%dT%H:%M:%S.%fZ"
     )  # for easy conversion to Python datetime https://stackoverflow.com/a/10805633/13727176
@@ -68,10 +71,26 @@ if __name__ == "__main__":
         help="Path to directory where API response JSON should be stored.",
         default="data",
     )
+    parser.add_argument(
+        "-b",
+        "--base-url",
+        type=str,
+        help="base URL of the API.",
+        default="http://localhost:8502/",
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        type=str,
+        help="model to use for inference.",
+        default="resnet50_v1_fpn_640x640",
+    )
 
     args = parser.parse_args()
     input_dir = args.input_dir
     output_dir = args.output_dir
+    model = args.model
+    base_url = args.base_url
 
     if not os.path.isdir(input_dir):
         raise ValueError(f"Input directory '{input_dir}' does not exist.")
@@ -101,13 +120,12 @@ if __name__ == "__main__":
         for name, content in zip(filenames, base64_imgs)
     ]
 
-    url = "http://127.0.0.1:8502/api/detect"
-    payload = json.dumps({"images": img_payload_dicts})
+    url = f"{base_url}/api/detect"
+    payload = json.dumps({"images": img_payload_dicts, "model": model})
     headers = {"Content-Type": "application/json"}
     print(f"Sending data to API")
 
     upload_start_datetime, start_datetime_str = get_current_timestamp()
-    upload_start_datetime = datetime.datetime.now()
     response = requests.post(url, data=payload, headers=headers)
     request_time = (
         response.elapsed.total_seconds()
@@ -146,7 +164,7 @@ if __name__ == "__main__":
 
     output_file_path = os.path.join(
         output_dir,
-        f"flask-api_{input_dir.split('/')[-1]}_{start_datetime_str}.json",
+        f"{'l' if 'localhost' in url else 'r'}_flask_{input_dir.split('/')[-1]}_{start_datetime_str}.json",
     )
     print(f"Writing result to '{output_file_path}'")
     write_json_to_file(
