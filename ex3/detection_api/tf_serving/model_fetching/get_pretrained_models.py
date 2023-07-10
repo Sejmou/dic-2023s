@@ -54,11 +54,11 @@ def get_model_inputs(model):
         pp.pprint(signature_input_dict)
 
 
-# taken from https://cloud.google.com/blog/topics/developers-practitioners/add-preprocessing-functions-tensorflow-models-and-deploy-vertex-ai?hl=en
+# taken/adapted from https://cloud.google.com/blog/topics/developers-practitioners/add-preprocessing-functions-tensorflow-models-and-deploy-vertex-ai?hl=en
+# the resizing step is not necessary as the models accept images in any size
 def _preprocess(bytes_inputs):
     decoded = tf.io.decode_jpeg(bytes_inputs, channels=3)
-    resized = tf.image.resize(decoded, size=(512, 512))
-    return tf.cast(resized, dtype=tf.uint8)
+    return tf.cast(decoded, dtype=tf.uint8)
 
 
 def _get_serve_image_fn(model):

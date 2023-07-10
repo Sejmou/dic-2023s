@@ -163,13 +163,21 @@ if __name__ == "__main__":
         help="Name of the model (API endpoint) to use for inference.",
         required=True,
     )
+    parser.add_argument(
+        "-b",
+        "--base_url",
+        type=str,
+        help="Base URL of the API server.",
+        default="http://localhost:8501",
+    )
 
     args = parser.parse_args()
     input_dir = args.input_dir
     output_dir = args.output_dir
     model = args.model
+    base_url = args.base_url
 
-    url = f"http://localhost:8501/v1/models/{model}:predict"
+    url = f"{base_url}/v1/models/{model}:predict"
 
     if not os.path.isdir(input_dir):
         raise ValueError(f"Input directory '{input_dir}' does not exist.")
