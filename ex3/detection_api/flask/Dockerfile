@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:latest-gpu-py3
+FROM tensorflow/tensorflow:latest-gpu
 
 COPY ./requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
@@ -6,9 +6,9 @@ RUN pip install -r /app/requirements.txt
 COPY ./models/ /app/models/
 COPY ./app.py /app/app.py
 
-RUN ls
-
 WORKDIR /app
+
+RUN ls
 
 ENTRYPOINT ["python3"]
 CMD ["app.py"]
