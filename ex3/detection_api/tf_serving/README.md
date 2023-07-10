@@ -33,13 +33,13 @@ The g4dn instances are probably most suitable for this application as they also 
 #### Create EC2 instance
 Follow instructions from AWS Managment Console. Make sure to also specify (optionally create and download) a key pair so that you can easily ssh into the EC2 instance later. 
 
-Make sure to also make the instance reachable via HTTP(S) by configuring and selecting the correct security group. Settings that should work:
+Make sure to also make the instance reachable via HTTP(S) by configuring and selecting the correct security group. Settings that should work in theory:
 - inbound: 
   - TCP from anywhere via IPv4 and IPv6 on port 8501
   - SSH from anywhere via IPv4 and IPv6 on port 22
 - outbound: doesn't really matter for now I guess (need further research to figure out meaningful values)
 
-In fact, you could probably also just allow any traffic from anywhere for testing purposes. 
+**NOTE:** In practice, it only worked for me once I allowed _any_ TCP traffic (on all ports) - absolutely no idea why 🤷🏼‍♂️
 
 You can also create a launch template from the created container so that you don't have to reconfigure things every time you launch a new instance.
 
