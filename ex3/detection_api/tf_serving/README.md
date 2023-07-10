@@ -25,7 +25,7 @@ There's probably lots of ways to get this done. The approach explained here runs
 3. Click 'Start'
 4. When 'light'/indicator next to link called 'AWS' becomes green, click it to get to AWS console
 
-### Launch EC2 instance
+### Pick EC2 instance type
 The g4dn instances are probably most suitable for this application as they also come with a GPU. Pick an Ubuntu AMI (probably exact choice doesn't matter as Docker is used anyway - however, there's also a TensorFlow Deep Learning AMI). The smallest/cheapest one is `g4dn.large` (hourly cost of less than a dollar per hour).
 
 > **Important Note**: the g4dn.large image does not work with the Learner Lab AWS account. There, only a small subset of all available EC2 instances can be used (due to restrictions on the default service quotas). Even with a private account, you will need to request service quota increases (specifically, something w/ 'number of vCPUs for G, ... type instances' needs to be set to at least 4 as g4dn.large has 4 vCPUs; maybe other increases are also required). This process can take one or two work days, unfortunately.
