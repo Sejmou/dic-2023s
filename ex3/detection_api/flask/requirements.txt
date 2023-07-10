@@ -1,5 +1,2 @@
 Flask
-Pillow
-numpy
-tensorflow
-tensorflow_hub
+
