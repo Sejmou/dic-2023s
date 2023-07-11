@@ -1,4 +1,5 @@
 # Flask Object Detection API
+An Object Detection API accepting Base64 images as input. It uses a modified version of models from TensorFlow Hub (models created with the `get_pretrained_models.py` script - check it for details).
 
 ## Local Setup
 
@@ -80,7 +81,7 @@ docker pull public.ecr.aws/k6o2m4v2/flask-detection-api:latest
 The command is almost the same as with the local setup:
 
 ```bash
-docker run -it --runtime=nvidia --expose 8502 -p 8502:8502 public.ecr.aws/k6o2m4v2/flask-detection-api:latest
+docker run -it --runtime=nvidia -p 8502:8502 public.ecr.aws/k6o2m4v2/flask-detection-api:latest
 ```
 
 Once you see a message that the server is running, the EC2 instance should be accessible via the public IP of the EC2 instance under port 8502 and the `client_flask_api.py` script should work.
