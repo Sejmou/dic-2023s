@@ -1,12 +1,27 @@
 # Object Detection API built with TensorFlow Serving (using pretrained models from TensorFlow Hub)
 This API utilizes Object Detection Models hosted on TensorFlow Hub and serves them via a TensorFlow Serving Docker Image.
 
-In fact, it should work with _any_ object detection model saved as a TensorFlow v2 SavedModel. However, for now it is configured to use two models (a fast, but less accurate one and a slow, more accurate one) from TensorFlow Hub, serving them on different endpoints. 
+> **Important note:** Unfortunately, we could not get this solution to work with a GPU, hence we abandoned it in favor of the Flask API solution (see sibling folder). We were unable to figure out what the exact issue was, as some pretty weird internal error was thrown whenever the first request was made (see below). Even quite extensive googling did not help us resolve the issue. The error showed up both on a local machine with NVIDIA GPU (with nvidia containertoolkit configured properly) and an AWS g4dn.xlarge instance (which was also preconfigured with nvidia containertoolkit).
+
+```
+[evhttp_server.cc : 245] NET_LOG: Entering the event loop ...
+2023-07-11 18:29:03.216176: I external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:424] Loaded cuDNN version 8600
+2023-07-11 18:29:03.714192: I external/org_tensorflow/tensorflow/tsl/platform/default/subprocess.cc:304] Start cannot spawn child process: No such file or directory
+2023-07-11 18:29:03.714386: I external/org_tensorflow/tensorflow/tsl/platform/default/subprocess.cc:304] Start cannot spawn child process: No such file or directory
+2023-07-11 18:29:03.714398: W external/org_tensorflow/tensorflow/compiler/xla/stream_executor/gpu/asm_compiler.cc:109] Couldn't get ptxas version : FAILED_PRECONDITION: Couldn't get ptxas/nvlink version string: INTERNAL: Couldn't invoke ptxas --version
+2023-07-11 18:29:03.714671: I external/org_tensorflow/tensorflow/tsl/platform/default/subprocess.cc:304] Start cannot spawn child process: No such file or directory
+2023-07-11 18:29:03.714719: W external/org_tensorflow/tensorflow/compiler/xla/stream_executor/gpu/redzone_allocator.cc:317] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+```
+
+Reach out to us if you manage to fix the problem lol
 
 ## How it works
-The `get_pretrained_models.py` script in the `model_fetching` directory downloads the models, adapts them so that they accept Base64 encoded JPEG images (instead of a tensor of shape) as input, and finally stores them.
+All the magic happens in the `start_cpu.sh` and `start_gpu.sh` scripts. With this approach, no custom Docker Image is created. Instead, a TensorFlow Serving Docker Image is used to serve the models on the host machine, making them accessible via a REST API. The `models.config` is used to map the folders with the saved models to API endpoints (details on how that works [here](https://www.tensorflow.org/tfx/serving/serving_config#model_server_config_details)).
 
-A TensorFlow Serving Docker Image is used to serve the models on the host machine, making them accessible via a REST API. The `models.config` is used to map the folders with the saved models to API endpoints (details on how that works [here](https://www.tensorflow.org/tfx/serving/serving_config#model_server_config_details)).
+> **Important note:** The script expects that the models referred to in the config file exist in a `models` subdirectory, created with the `get_pretrained_models.py`  
 
 The `run_cpu.sh` and `run_gpu.sh` scripts in this folder can be used to set up and start the server Docker Image, either with CPU only or with GPU (depending on the host machine). The host machine is expected to come with Python 3.8+ preinstalled and use 64-bit x86 chip architecture, which means that this will not run out-of-the-box on ARM architectures, including M1/M2 Macs. Note that the scripts expect that a `models` directory created with the `get_pretrained_models.py` script exists (it should contain the models referred to in `models.config`).
 
@@ -58,23 +73,3 @@ This will take a bit as the Docker Image needs to be pulled. But after a while y
 ```bash
 curl ec2-3-122-229-105.eu-central-1.compute.amazonaws.com/v1/models/resnet50_v1_fpn_640x640/metadata
 ```
-
-## Additional AWS instructions
-
-### Get to AWS Management Console (with AWS Learner Lab Account)
-
-1. Login to Learner Lab
-2. Navigate to Dashboard
-3. Click 'Start'
-4. When 'light'/indicator next to link called 'AWS' becomes green, click it to get to AWS console
-### Access to AWS CLI from local device with Learner Lab account
-In Learner Lab Dashboard:
-1. Click on 'AWS Details'
-2. Click on 'Show' button next to 'AWS CLI'
-3. Follow instructions (copying the shown config to the specified folder)
-
-### Store credentials for root user of private AWS account for use with AWS CLI
-1. Follow instructions for creating access key [here](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_root-user.html#id_root-user_manage_add-key)
-2. Use `aws config` to store the created access key (+ id) in the credentials file (automatically used by CLI). Recommended settings:
-   - default region name: eu-central-1 (Frankfurt, closest to Vienna)
-   - default output format: json

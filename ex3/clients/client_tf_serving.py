@@ -161,7 +161,7 @@ if __name__ == "__main__":
         "--model",
         type=str,
         help="Name of the model (API endpoint) to use for inference.",
-        required=True,
+        default="resnet50_v1_fpn_640x640",
     )
     parser.add_argument(
         "-b",
