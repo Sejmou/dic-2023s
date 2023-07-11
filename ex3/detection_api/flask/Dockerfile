@@ -10,6 +10,9 @@ WORKDIR /app
 
 RUN ls
 
+# Expose port where server listens on
+EXPOSE 8502
+
 ENTRYPOINT ["python3"]
 CMD ["app.py"]
 

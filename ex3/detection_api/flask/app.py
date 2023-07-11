@@ -57,7 +57,7 @@ def create_app():
         data = detection_loop(predict_fn, list(zip(filenames, img_bytes)))
 
         processing_time = (
-            datetime.datetime.now(timezone.utc) - incoming_request_time
+            datetime.datetime.utcnow() - incoming_request_time
         ).total_seconds()
         data["processing_time"] = processing_time
         data["request_received_at"] = incoming_request_time_str
