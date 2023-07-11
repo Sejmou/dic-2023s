@@ -6,7 +6,6 @@ import requests
 import argparse
 import time
 import datetime
-from datetime import timezone
 
 
 def get_image_paths(folder):
@@ -69,7 +68,7 @@ if __name__ == "__main__":
         "--output_dir",
         type=str,
         help="Path to directory where API response JSON should be stored.",
-        default="data",
+        default=os.path.join("data", "results"),
     )
     parser.add_argument(
         "-b",
@@ -121,11 +120,30 @@ if __name__ == "__main__":
     ]
 
     url = f"{base_url}/api/detect"
-    payload = json.dumps({"images": img_payload_dicts, "model": model})
     headers = {"Content-Type": "application/json"}
-    print(f"Sending data to API")
+
+    print(f"Sending warm up request to API")
+    # First, send "warm-up request" to the model server (inference for first image(s) always takes longer)
+    # in real-life settings, the request made by a client is very unlikely to be the very first ever
+    # so, response time measurements for this request aren't meaningful metrics for the general performance of the model server
+    warmup_request_payload = json.dumps(
+        {
+            "images": [
+                img_payload_dicts[0],
+                img_payload_dicts[0],
+                img_payload_dicts[0],
+            ],
+            "model": model,
+        }
+    )
+    warmup_request = requests.post(url, data=warmup_request_payload, headers=headers)
+    print(f"Received response with status code {warmup_request.status_code}")
+
+    print("Proceeding with actual data...")
+    payload = json.dumps({"images": img_payload_dicts, "model": model})
 
     upload_start_datetime, start_datetime_str = get_current_timestamp()
+    print(f"Sending request to API")
     response = requests.post(url, data=payload, headers=headers)
     request_time = (
         response.elapsed.total_seconds()

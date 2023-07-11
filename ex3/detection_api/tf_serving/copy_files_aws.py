@@ -21,30 +21,29 @@ def main(pem_file, remote_address, cpu_only, local_models_path):
 
     script_dest = "start.sh"
 
-    copy_files(pem_file, remote_address, config_source, config_dest)
-    copy_files(pem_file, remote_address, script_source, script_dest)
-
-    if local_models_path:
-        if os.path.exists(local_models_path):
-            copy_files(pem_file, remote_address, local_models_path, "models")
-        else:
-            raise ValueError("Invalid path to local models directory")
+    if os.path.isdir(local_models_path):
+        copy_files(pem_file, remote_address, local_models_path, "models")
+        print("Copied models directory to remote instance.")
     else:
-        print(
-            f"No path to local pretrained models provided. Copying script for fetching models instead."
+        raise ValueError(
+            "Invalid path to local models directory. Make sure to create it with `get_pretrained_models.py` first."
         )
-        copy_files(pem_file, remote_address, "model_fetching", "model_fetching")
+
+    copy_files(pem_file, remote_address, config_source, config_dest)
+    print("Copied config directory to remote instance.")
+    copy_files(pem_file, remote_address, script_source, script_dest)
+    print("Copied start script to remote instance.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Copy files required for running Object Detection API to remote Ubuntu EC2 instance"
+        description="Copies files required for running TensorFlow Serving Object Detection API to remote Ubuntu EC2 instance."
     )
     parser.add_argument(
         "-p",
         "--pem-file",
-        default="/users/sejmou/.ssh/aws-sejmou.pem",
-        help="Path to the PEM file",
+        default="aws-sejmou-ubuntu.pem",
+        help="Path to the PEM file to use for SSH authentication",
     )
     parser.add_argument(
         "-r",
@@ -53,10 +52,16 @@ if __name__ == "__main__":
         help="Public IPv4 DNS address of EC2 instance",
     )
     parser.add_argument(
-        "-c", "--cpu-only", action="store_true", help="Flag for CPU-only"
+        "-c",
+        "--cpu-only",
+        action="store_true",
+        help="Create script for launching Docker container without GPU support",
     )
     parser.add_argument(
-        "-l", "--local-models-path", help="Path to local models directory"
+        "-l",
+        "--local-models-path",
+        help="Path to local models directory",
+        required=True,
     )
 
     args = parser.parse_args()

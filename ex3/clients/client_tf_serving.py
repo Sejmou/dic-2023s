@@ -196,11 +196,15 @@ if __name__ == "__main__":
 
     start_datetime, start_datetime_str = get_current_timestamp()
 
-    # warm up the API with 3 dummy requests (experiments showed that first request is always slower)
-    print("Warming up API with 3 dummy requests...")
+    print(f"Sending 3 warm up requests to API")
+    # First, send "warm-up request" to the model server (inference for first image(s) always takes longer)
+    # in real-life settings, the request made by a client is very unlikely to be the very first ever
+    # so, response time measurements for this request aren't meaningful metrics for the general performance of the model server
+
     for _ in tqdm(list(range(3))):
         dummy_base64_img = encode_image(Image.open(img_paths[0]))
         get_prediction(url, dummy_base64_img)
+    print(f"Finished sending warm up requests to API, proceeding with benchmarking")
 
     boxes_per_image = {}
     response_times = []

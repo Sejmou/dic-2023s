@@ -1,0 +1,5 @@
+# directory where the pretrained models for each API are stored
+models
+
+# private keys for AWS (probably not best practice to store them inside repo instead of in a secure location, but who cares)
+*.pem

@@ -1,12 +1,6 @@
 # Download the TensorFlow Serving Docker image and repo
 docker pull tensorflow/serving
 
-if [ ! -d "models" ]; then
-    # Download the models with helper script
-    pip install -r model_fetching/requirements.txt
-    python3 model_fetching/get_pretrained_models.py
-fi
-
 # Set up the environment variables for model and config folders
 MODELS_FOLDER=$(pwd)/models
 CONFIG_FOLDER=$(pwd)/config

@@ -6,11 +6,9 @@ In fact, it should work with _any_ object detection model saved as a TensorFlow 
 ## How it works
 The `get_pretrained_models.py` script in the `model_fetching` directory downloads the models, adapts them so that they accept Base64 encoded JPEG images (instead of a tensor of shape) as input, and finally stores them.
 
-A TensorFlow Serving Docker Image is used to run serve the models on the host machine, making them accessible via a REST. The `models.config` is used to map the folders with the saved models to API endpoints.
+A TensorFlow Serving Docker Image is used to serve the models on the host machine, making them accessible via a REST API. The `models.config` is used to map the folders with the saved models to API endpoints (details on how that works [here](https://www.tensorflow.org/tfx/serving/serving_config#model_server_config_details)).
 
-The `run_cpu.sh` and `run_gpu.sh` scripts can be used to set up and start the server, either with CPU only or with GPU (depending on the host machine). The host machine is expected to come with Python 3.8+ preinstalled and use 64-bit x86 chip architecture, which means that this will not run out-of-the-box on ARM architectures, including M1/M2 Macs.
-
-Note that packages mentioned in `scripts/requirements.txt` are installed in the process. If you don't want that, just create and activate a virtual environment beforehand.
+The `run_cpu.sh` and `run_gpu.sh` scripts in this folder can be used to set up and start the server Docker Image, either with CPU only or with GPU (depending on the host machine). The host machine is expected to come with Python 3.8+ preinstalled and use 64-bit x86 chip architecture, which means that this will not run out-of-the-box on ARM architectures, including M1/M2 Macs. Note that the scripts expect that a `models` directory created with the `get_pretrained_models.py` script exists (it should contain the models referred to in `models.config`).
 
 ## Local Setup
 Just run either `run_cpu.sh` or `run_gpu.sh` (`chmod +x` might be necessary).
