@@ -161,6 +161,7 @@ if __name__ == "__main__":
     result["upload_time"] = upload_time
     result["input_folder_name"] = input_dir.split("/")[-1]
     result["api_url"] = url
+    result["model"] = model
 
     output_file_path = os.path.join(
         output_dir,
