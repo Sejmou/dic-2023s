@@ -50,7 +50,11 @@ ssh -i "~/.ssh/aws-sejmou.pem" ubuntu@ec2-3-122-229-105.eu-central-1.compute.ama
 ```
 replacing keyfile and adress with your own path, obviously.
 
-If this works, you have successfully connected with the instance and you should be able to run the `copy_files_aws.py` script on your local machine which copies over all the necessary files via `scp`. Check the script for details on what happens and what arguments are required/expected.
+If this works, you have successfully connected with the instance and you should be able to run the `copy_files_aws.py` script on your local machine which copies over all the necessary files via `scp`:
+```bash
+python copy_files_aws.py -r ec2-3-70-137-214.eu-central-1.compute.amazonaws.com
+```
+Check the script for details on what happens and what arguments are required/expected.
 
 Once the script is done, all the necessary things to run the API server are there! To start the server, run the server startup script from the instance you ssh-ed into:
 ```bash
