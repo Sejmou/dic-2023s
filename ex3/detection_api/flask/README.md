@@ -48,13 +48,13 @@ The [g4dn](https://aws.amazon.com/ec2/instance-types/g4/#:~:text=G4dn%20instance
 ### Create EC2 instance
 Follow instructions from AWS Managment Console. Make sure to also specify (optionally create and download) a key pair so that you can easily ssh into the EC2 instance later. 
 
-Make sure to also make the instance reachable via HTTP(S) by configuring and selecting the correct security group. Settings that should work in theory:
-- inbound: 
-  - TCP from anywhere via IPv4 and IPv6 on port 8501
-  - SSH from anywhere via IPv4 and IPv6 on port 22
-- outbound: doesn't really matter for now I guess (need further research to figure out meaningful values)
+### Configure security group (inbound and outbound rules)
+Make sure to also make the instance reachable via HTTP(S) by configuring and selecting the correct security group for the EC2 instance and configuring it accordingly. The security group settings can be found in the VPC (Virtual Private Cloud) section of the AWS Managment Console. Settings that should work:
 
-> **NOTE:** In practice, it only worked for me once I allowed _any_ TCP traffic (on all ports) - absolutely no idea why 🤷🏼‍♂️
+- inbound: 
+  - TCP from anywhere via IPv4 and IPv6 on port 8502
+  - SSH from anywhere via IPv4 and IPv6 on port 22
+- outbound: you can keep the default (all traffic)
 
 You can also create a launch template from the created container so that you don't have to reconfigure things every time you launch a new instance.
 
